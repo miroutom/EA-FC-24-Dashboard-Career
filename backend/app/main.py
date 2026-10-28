@@ -53,6 +53,10 @@ def row_dto(row):
 
 def create_app(settings=None, migrate=True):
     settings = settings or Settings()
+    if settings.demo_mode:
+        from .demo_data import prepare_demo_directory
+
+        prepare_demo_directory(settings)
     engine = make_engine(settings.data_dir)
     if migrate:
         # Revision uses concrete DDL; tests and production follow the same upgrade path.
@@ -64,6 +68,12 @@ def create_app(settings=None, migrate=True):
             cfg.attributes["connection"].close()
     factory = session_factory(engine)
     ingestor = Ingestor(factory, settings)
+    simulator = None
+    if settings.demo_mode:
+        from .demo_data import DemoSimulator, seed_demo
+
+        simulator = DemoSimulator(ingestor, seed_demo(factory))
+        simulator.seed_snapshots()
     watcher = Watcher(ingestor)
 
     @asynccontextmanager
@@ -76,6 +86,7 @@ def create_app(settings=None, migrate=True):
 
     app = FastAPI(title="Leicester City Analytics", version="0.2.0", lifespan=lifespan)
     app.state.factory, app.state.ingestor, app.state.watcher = factory, ingestor, watcher
+    app.state.simulator = simulator
 
     def db():
         with factory.begin() as session:
@@ -94,6 +105,7 @@ def create_app(settings=None, migrate=True):
             competition_id=competition_id,
             as_of=as_of.astimezone(UTC).isoformat() if as_of else None,
             save_id=save_id,
+            demo_mode=settings.demo_mode,
         )
 
     @app.middleware("http")
@@ -105,6 +117,8 @@ def create_app(settings=None, migrate=True):
             "http://localhost:8000",
             "http://127.0.0.1:5173",
             "http://localhost:5173",
+            f"http://127.0.0.1:{settings.http_port}",
+            f"http://localhost:{settings.http_port}",
         )
         if host not in ("127.0.0.1", "localhost", "testserver") or (origin and origin not in allowed):
             return JSONResponse(
@@ -145,7 +159,18 @@ def create_app(settings=None, migrate=True):
 
     @app.get(base + "/health", response_model=DTO)
     def health():
-        return {"status": "ok", "collector": "not verified", "version": "0.2.0"}
+        return {
+            "status": "ok",
+            "collector": "demo simulator" if settings.demo_mode else "not verified",
+            "version": "0.2.0",
+            "demo_mode": settings.demo_mode,
+        }
+
+    if settings.demo_mode:
+
+        @app.post(base + "/demo/advance", response_model=DTO)
+        def advance_demo():
+            return simulator.advance()
 
     @app.get(base + "/careers", response_model=list[CareerDTO])
     def get_careers(session=Depends(db)):
@@ -386,7 +411,10 @@ def create_app(settings=None, migrate=True):
             .where(SyncEvent.save_id.in_(ids), SyncEvent.action == "IGNORED")
         )
         return {
-            "collector": "verified by user evidence"
+            "demo_mode": settings.demo_mode,
+            "collector": "demo simulator (synthetic)"
+            if settings.demo_mode
+            else "verified by user evidence"
             if saves and all(s.verified_live for s in saves)
             else "not verified",
             "connected": bool(successful and not stale),
@@ -423,7 +451,7 @@ def create_app(settings=None, migrate=True):
             "capabilities": {
                 "match_details": "UNAVAILABLE",
                 "ratings": "NOT_TESTED",
-                "auto_capture": "NOT_TESTED",
+                "auto_capture": "SIMULATED" if settings.demo_mode else "NOT_TESTED",
             },
         }
 
@@ -548,7 +576,8 @@ def create_app(settings=None, migrate=True):
 def main():
     import uvicorn
 
-    uvicorn.run(create_app(), host="127.0.0.1", port=8000)
+    settings = Settings()
+    uvicorn.run(create_app(settings), host="127.0.0.1", port=settings.http_port)
 
 
 if __name__ == "__main__":

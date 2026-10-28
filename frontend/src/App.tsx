@@ -31,8 +31,13 @@ import {
 } from "./shared/api";
 import { Feedback } from "./shared/components";
 import { ScopeContext } from "./shared/context";
+import { DemoBanner } from "./shared/DemoBanner";
 
 export function App() {
+  const health = useQuery({
+    queryKey: ["health"],
+    queryFn: () => api<{ demo_mode: boolean }>("/health"),
+  });
   const [careerId, setCareerId] = useState<number | null>(
     () => Number(localStorage.getItem("careerId")) || null,
   );
@@ -150,14 +155,21 @@ export function App() {
               <span
                 className={sync.data?.connected ? "green-dot" : "amber-dot"}
               />
-              Collector:{" "}
-              {sync.data?.collector === "verified by user evidence"
-                ? "verified"
-                : "not verified"}
+              {health.data?.demo_mode ? (
+                "ДЕМО: симулятор"
+              ) : (
+                <>
+                  Collector:{" "}
+                  {sync.data?.collector === "verified by user evidence"
+                    ? "verified"
+                    : "not verified"}
+                </>
+              )}
             </span>
             <span className="user-mark">LC</span>
           </div>
         </header>
+        {health.data?.demo_mode && <DemoBanner />}
         <div className="scopebar">
           <div className="club-context">
             <span className="mini-crest">LC</span>

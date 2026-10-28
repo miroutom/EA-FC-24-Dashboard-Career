@@ -12,6 +12,8 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=ROOT / ".env", extra="ignore")
     data_dir: Path = ROOT / "data"
     watcher_enabled: bool = True
+    demo_mode: bool = False
+    http_port: int = 8000
     stale_seconds: int = 300
     max_file_bytes: int = 5 * 1024 * 1024
 

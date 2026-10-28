@@ -259,7 +259,10 @@ export function Squad() {
                 </Empty>
               )}
             </div>
-            <Quality warnings={query.data.warnings} />
+            <Quality
+              warnings={query.data.warnings}
+              demo={query.data.data_quality.includes("demo")}
+            />
           </section>
         )
       ) : (

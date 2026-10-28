@@ -34,3 +34,7 @@ Real Excel (`Все сезоны`): **123 rows**, **82 distinct exact-name playe
 ## Windows game validation
 
 Follow [manual-game-validation.md](manual-game-validation.md), then add evidence to [capability-matrix.md](capability-matrix.md). Do not enable unverified source/trigger/context flags or claim unattended in-game collection before this test.
+
+## Follow-up: explicit Mac demo (2026-10-28)
+
+The user authorized synthetic demo data. A separate data-demo sandbox now seeds fictional players and example snapshots. Normal game/production verification remains unchanged. Regression suite: 48 backend tests; 6 frontend tests, plus a dedicated browser demo/watcher scenario. Mac launcher uses port 8001 and does not replace the real data/ database or mark synthetic saves verified.

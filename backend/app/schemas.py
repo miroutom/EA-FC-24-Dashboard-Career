@@ -47,7 +47,7 @@ class SnapshotRowInput(Input):
 
 class SnapshotInput(Input):
     schema_version: Literal[1]
-    producer: Literal["fc24-live-editor-lua"]
+    producer: Literal["fc24-live-editor-lua", "lca-demo-simulator"]
     collector_version: str = Field(min_length=1, max_length=40)
     game_version: Literal["EA FC 24"]
     captured_at_utc: datetime

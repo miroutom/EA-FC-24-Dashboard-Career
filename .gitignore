@@ -44,6 +44,7 @@ luac.out
 # Local data and credentials
 .env
 data/
+data-demo/
 *.sqlite3*
 collectors/fc24-live-editor/config.lua
 

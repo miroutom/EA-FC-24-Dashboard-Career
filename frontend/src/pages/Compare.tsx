@@ -82,7 +82,11 @@ export function Compare() {
       ) : (
         compare.data && (
           <>
-            <Quality />
+            <Quality
+              demo={compare.data.items.every((p) =>
+                p.data_quality?.includes("demo"),
+              )}
+            />
             <section className="panel">
               <div
                 className="chart"

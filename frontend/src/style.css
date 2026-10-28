@@ -1,5 +1,35 @@
 @import "tailwindcss";
 
+.demo-banner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 15px 36px;
+  background: #59401f45;
+  border-bottom: 1px solid #c4963940;
+  color: #e6bf71;
+}
+.demo-banner > div {
+  flex: 1;
+}
+.demo-banner strong {
+  font-size: 12px;
+}
+.demo-banner p {
+  font-size: 10px;
+  color: #bda46f;
+  margin-top: 3px;
+}
+@media (max-width: 800px) {
+  .demo-banner {
+    padding: 14px 18px;
+    flex-wrap: wrap;
+  }
+  .demo-banner .button {
+    margin-left: 35px;
+  }
+}
+
 :root {
   font-family:
     Inter,

@@ -46,12 +46,20 @@ export function Feedback({
     </div>
   ) : null;
 }
-export function Quality({ warnings = [] }: { warnings?: string[] }) {
+export function Quality({
+  warnings = [],
+  demo = false,
+}: {
+  warnings?: string[];
+  demo?: boolean;
+}) {
   return (
     <div className="quality">
       <Info size={15} />
       <span>
-        Частичная история · только учтённые показатели источника.
+        {demo
+          ? "ДЕМО · все игроки и показатели вымышленные."
+          : "Частичная история · только учтённые показатели источника."}
         {warnings.length > 0 && (
           <details>
             <summary>Сведения об источниках ({warnings.length})</summary>

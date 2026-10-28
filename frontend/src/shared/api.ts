@@ -33,6 +33,7 @@ export type Player = {
   last_season: string;
   history: History[];
   sources: string[];
+  data_quality: string[];
   rating: Metric;
   overall: Metric;
   potential: Metric;

@@ -45,7 +45,10 @@ export function Summary() {
                 detail="Сумма выступлений, не матчей клуба"
               />
             </div>
-            <Quality warnings={d.warnings} />
+            <Quality
+              warnings={d.warnings}
+              demo={d.data_quality.includes("demo")}
+            />
             <div className="dashboard-grid">
               <section className="panel">
                 <div className="panel-heading">

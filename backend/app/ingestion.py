@@ -82,6 +82,8 @@ class Ingestor:
                 if len(content) > self.settings.max_file_bytes:
                     raise ValueError("FILE_TOO_LARGE")
                 doc = SnapshotInput.model_validate_json(content)
+                if (doc.producer == "lca-demo-simulator") != self.settings.demo_mode:
+                    raise ValueError("Synthetic and real snapshot sources must stay isolated")
             except (ValidationError, ValueError):
                 item.status, item.error, item.updated_at = (
                     "QUARANTINE",
@@ -275,7 +277,9 @@ class Ingestor:
                     level="WARNING" if status in ("CONFLICT", "HELD") else "INFO",
                     message=rollback_reason
                     or (
-                        "Снимок принят; экспериментальный источник"
+                        "ДЕМО: принят синтетический снимок"
+                        if self.settings.demo_mode
+                        else "Снимок принят; экспериментальный источник"
                         if not binding.verified_live
                         else "Снимок принят"
                     ),

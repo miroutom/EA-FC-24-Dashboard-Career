@@ -23,7 +23,9 @@ def total(values):
     return sum(values) if values and all(v is not None for v in values) else None
 
 
-def records(session, career_id, season_id=None, competition_id=None, as_of=None, save_id=None):
+def records(
+    session, career_id, season_id=None, competition_id=None, as_of=None, save_id=None, demo_mode=False
+):
     career(session, career_id)
     seasons = session.scalars(
         select(Season).where(Season.career_id == career_id).order_by(Season.start_year)
@@ -79,8 +81,8 @@ def records(session, career_id, season_id=None, competition_id=None, as_of=None,
                         "season_id": ss.id,
                         "season": f"{ss.start_year}/{str(ss.end_year)[2:]}",
                         **{m: getattr(stat, m) for m in METRICS},
-                        "source": "historical",
-                        "data_quality": "historical_partial",
+                        "source": "demo" if stat.coverage == "DEMO_SYNTHETIC" else "historical",
+                        "data_quality": "demo" if stat.coverage == "DEMO_SYNTHETIC" else "historical_partial",
                         "coverage": stat.coverage,
                         "source_scope": stat.scope,
                     }
@@ -97,8 +99,8 @@ def records(session, career_id, season_id=None, competition_id=None, as_of=None,
                 grouped[row.player_id].append((row, snap))
         for player_id, pairs in grouped.items():
             complete = all(snap.completeness == "COMPLETE" for _, snap in pairs)
-            # No invented all-competition totals from an unproven set of tournaments.
-            allowed_total = external_comp is not None or (complete and chosen.verified_live)
+            # Synthetic totals are permitted only in the explicitly isolated demo application.
+            allowed_total = external_comp is not None or (complete and (chosen.verified_live or demo_mode))
             if not allowed_total:
                 warnings.append("Состав турниров не подтверждён: выберите турнир для Live-показателей")
             out.append(
@@ -110,9 +112,17 @@ def records(session, career_id, season_id=None, competition_id=None, as_of=None,
                         m: total(getattr(row, m) for row, _ in pairs) if allowed_total else None
                         for m in METRICS
                     },
-                    "source": "live",
-                    "data_quality": "verified_live" if chosen.verified_live else "unknown",
-                    "coverage": "COMPLETE" if allowed_total and complete else "PARTIAL_LIVE",
+                    "source": "demo" if demo_mode else "live",
+                    "data_quality": "demo"
+                    if demo_mode
+                    else "verified_live"
+                    if chosen.verified_live
+                    else "unknown",
+                    "coverage": "DEMO_SYNTHETIC"
+                    if demo_mode
+                    else "COMPLETE"
+                    if allowed_total and complete
+                    else "PARTIAL_LIVE",
                     "source_scope": "COMPETITION"
                     if external_comp is not None
                     else "ALL_COMPETITIONS"
@@ -182,7 +192,14 @@ def players(session, career_id, **filters):
 
 
 def competition_history(
-    session, career_id, player_id, season_id=None, competition_id=None, as_of=None, save_id=None
+    session,
+    career_id,
+    player_id,
+    season_id=None,
+    competition_id=None,
+    as_of=None,
+    save_id=None,
+    demo_mode=False,
 ):
     query = select(CareerSave).where(CareerSave.career_id == career_id)
     if save_id is not None:
@@ -213,8 +230,8 @@ def competition_history(
                     "competition": comp.name,
                     "compobjid": row.compobjid,
                     **{m: getattr(row, m) for m in METRICS},
-                    "source": "live",
-                    "coverage": snap.completeness,
+                    "source": "demo" if demo_mode else "live",
+                    "coverage": "DEMO_SYNTHETIC" if demo_mode else snap.completeness,
                 }
             )
     return result
@@ -241,5 +258,7 @@ def dashboard(session, career_id, **filters):
         )[:5],
         "team_matches": None,
         "xg": None,
-        "coverage": "Неполная история: только учтённые строки источника",
+        "coverage": "ДЕМО: все показатели вымышленные"
+        if filters.get("demo_mode")
+        else "Неполная история: только учтённые строки источника",
     }
