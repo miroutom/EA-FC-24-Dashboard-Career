@@ -29,6 +29,8 @@ Cloudflared, Cloudflare Tunnel, ngrok и другие внешние тунне�
 
 ## Быстрый запуск — Windows
 
+Для передачи подготовки Windows-агенту Codex: [полное задание до запуска игры](WINDOWS_CODEX_PRE_GAME.md).
+
 Нужны Python **3.12+**, Node.js **22 LTS** и npm. Откройте PowerShell в корне проекта:
 
 ```powershell
