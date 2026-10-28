@@ -38,3 +38,7 @@ Follow [manual-game-validation.md](manual-game-validation.md), then add evidence
 ## Follow-up: explicit Mac demo (2026-10-28)
 
 The user authorized synthetic demo data. A separate data-demo sandbox now seeds fictional players and example snapshots. Normal game/production verification remains unchanged. Regression suite: 48 backend tests; 6 frontend tests, plus a dedicated browser demo/watcher scenario. Mac launcher uses port 8001 and does not replace the real data/ database or mark synthetic saves verified.
+
+## Follow-up: richer demo charts and local-only runtime
+
+Added three synthetic historical seasons idempotently (8 seasons total) and three overview plots: stacked goals/assists leaders, observed-goal distribution by role, and appearances vs goal contributions. Charts share career/season/competition filters and exclude unknown counters without filling them with zeros. Regression checks: 49 backend tests, 10 frontend tests, production build and the extended demo browser scenario passed. The browser scenario checks chart geometry, watcher-driven UI updates, layout at 768px, and zero HTTP(S) requests to external hosts. Local inspection found no cloudflared process; the demo listener was bound to 127.0.0.1:8001. The application starts no external tunnel.

@@ -137,6 +137,12 @@ export function Trend({ data }: { data: Partial<History>[] }) {
             stroke="#5086ff"
             fill="url(#goalsFill)"
             strokeWidth={3}
+            dot={
+              data.length === 1
+                ? { r: 5, fill: "#5086ff", strokeWidth: 2 }
+                : false
+            }
+            activeDot={{ r: 5 }}
             connectNulls={false}
           />
           <Area
@@ -147,6 +153,12 @@ export function Trend({ data }: { data: Partial<History>[] }) {
             stroke="#3cd8b1"
             fill="transparent"
             strokeWidth={2}
+            dot={
+              data.length === 1
+                ? { r: 5, fill: "#3cd8b1", strokeWidth: 2 }
+                : false
+            }
+            activeDot={{ r: 5 }}
             connectNulls={false}
           />
         </AreaChart>

@@ -4,6 +4,15 @@ test("Mac demo is labelled, isolated, populated and updates through the watcher"
   page,
   request,
 }) => {
+  const externalRequests: string[] = [];
+  page.on("request", (request) => {
+    const url = new URL(request.url());
+    if (
+      ["http:", "https:"].includes(url.protocol) &&
+      !["127.0.0.1", "localhost"].includes(url.hostname)
+    )
+      externalRequests.push(url.origin);
+  });
   const health = await (await request.get("/api/v1/health")).json();
   expect(health.demo_mode).toBe(true);
   await page.goto("/");
@@ -17,6 +26,7 @@ test("Mac demo is labelled, isolated, populated and updates through the watcher"
     await request.get(`/api/v1/careers/${cid}/dashboard`)
   ).json();
   expect(initial.players_count).toBe(22);
+  expect(initial.seasons_count).toBe(8);
   expect(initial.data_quality).toEqual(["demo"]);
   await expect(
     page
@@ -49,6 +59,26 @@ test("Mac demo is labelled, isolated, populated and updates through the watcher"
   await expect(
     page.locator(".kpi").filter({ hasText: "Голы игроков" }).locator("strong"),
   ).toHaveText(updated.kpis.goals.toLocaleString("ru-RU"), { timeout: 10000 });
+  await expect(
+    page.getByRole("heading", { name: "Лидеры атаки" }),
+  ).toBeVisible();
+  await expect(
+    page
+      .getByRole("img", { name: "Лидеры по голам и ассистам" })
+      .locator(".recharts-bar-rectangle"),
+  ).toHaveCount(16);
+  await expect(
+    page
+      .getByRole("img", { name: "Распределение голов по позициям" })
+      .locator(".recharts-pie-sector"),
+  ).toHaveCount(3);
+  await expect(
+    page
+      .getByRole("img", {
+        name: "Связь выступлений и голевых действий игроков",
+      })
+      .locator(".recharts-scatter-symbol"),
+  ).toHaveCount(22);
   await page.screenshot({
     path: "test-results/demo-dashboard.png",
     fullPage: true,
@@ -77,4 +107,8 @@ test("Mac demo is labelled, isolated, populated and updates through the watcher"
   await expect(
     page.getByRole("region", { name: "Демонстрационный режим" }),
   ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Лидеры атаки" }),
+  ).toBeVisible();
+  expect(externalRequests).toEqual([]);
 });

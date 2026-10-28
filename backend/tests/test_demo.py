@@ -6,7 +6,7 @@ from sqlalchemy import func, select
 
 from app.core import Settings
 from app.main import create_app
-from app.models import CareerSave, Snapshot
+from app.models import Career, CareerSave, HistoricalStat, Snapshot
 
 
 @pytest.fixture
@@ -22,7 +22,7 @@ def test_demo_is_labelled_populated_and_never_game_verified(demo_app):
         careers = client.get("/api/v1/careers").json()
         assert len(careers) == 2
         d = client.get(f"/api/v1/careers/{careers[0]['id']}/dashboard").json()
-        assert d["players_count"] == 22 and d["seasons_count"] == 5
+        assert d["players_count"] == 22 and d["seasons_count"] == 8
         assert d["kpis"]["goals"] > 0
         assert d["data_quality"] == ["demo"]
         assert all(p["sources"] == ["demo"] for p in d["items"])
@@ -81,3 +81,20 @@ def test_demo_careers_have_separate_player_identities(demo_app):
         first = client.get(f"/api/v1/careers/{careers[0]['id']}/players").json()["items"]
         second = client.get(f"/api/v1/careers/{careers[1]['id']}/players").json()["items"]
         assert not ({p["id"] for p in first} & {p["id"] for p in second})
+
+
+def test_extended_demo_history_is_added_once(demo_app):
+    from app.demo_data import seed_demo
+
+    with demo_app.state.factory() as db:
+        cid = db.scalar(select(Career.id).where(Career.name == "ДЕМО · Leicester City"))
+        before = db.scalar(
+            select(func.count()).select_from(HistoricalStat).where(HistoricalStat.career_id == cid)
+        )
+    assert before == 22 * 7  # Seven historical seasons plus one cumulative snapshot season.
+    seed_demo(demo_app.state.factory)
+    with demo_app.state.factory() as db:
+        after = db.scalar(
+            select(func.count()).select_from(HistoricalStat).where(HistoricalStat.career_id == cid)
+        )
+    assert after == before

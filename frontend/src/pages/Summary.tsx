@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { api, type Dashboard, fmt, params } from "../shared/api";
 import { Empty, Feedback, Kpi, Quality, Trend } from "../shared/components";
 import { useScope } from "../shared/context";
+import { StatsCharts } from "../features/analytics/StatsCharts";
 
 export function Summary() {
   const { career, filters, selectPlayer } = useScope();
@@ -102,6 +103,7 @@ export function Summary() {
                 ))}
               </section>
             </div>
+            <StatsCharts players={d.items} />
             <section className="panel">
               <div className="panel-heading">
                 <h2>История по сезонам</h2>

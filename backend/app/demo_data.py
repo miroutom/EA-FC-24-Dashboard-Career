@@ -1,6 +1,7 @@
 """Explicit synthetic sandbox. Never invoked by the normal application startup."""
 
 import csv
+import hashlib
 import io
 import json
 import re
@@ -17,6 +18,7 @@ from .models import (
     CareerSave,
     Competition,
     HistoricalStat,
+    ImportBatch,
     Note,
     Player,
     PlayerSeasonMetadata,
@@ -81,6 +83,8 @@ def _historical_csv(players, years):
             )
             assists = 0 if position == "ВРТ" else 2 + (i * 3 + year) % 14
             sheets = 4 + (i + year) % 12
+            scale = {2020: 0.55, 2021: 0.82, 2022: 1.18}.get(year, 1)
+            goals, assists = round(goals * scale), round(assists * scale)
             writer.writerow(
                 [
                     f"{year}/{str(year + 1)[2:]}",
@@ -101,6 +105,7 @@ def seed_demo(factory):
     with factory.begin() as session:
         primary = session.scalar(select(Career).where(Career.name == "ДЕМО · Leicester City"))
         if primary:
+            _extend_history(session, primary.id)
             return primary.id
         careers = [
             ("ДЕМО · Leicester City", PLAYERS, range(2023, 2027)),
@@ -138,7 +143,26 @@ def seed_demo(factory):
                 session.add(save)
                 session.flush()
                 session.add(SaveBranch(save_id=save.id, branch_no=0, status="ACTIVE"))
+        _extend_history(session, primary.id)
         return primary.id
+
+
+def _extend_history(session, career_id):
+    """Add three earlier synthetic seasons once, including to an existing demo sandbox."""
+    content = _historical_csv(PLAYERS, range(2020, 2023))
+    sha = hashlib.sha256(content).hexdigest()
+    if session.scalar(
+        select(ImportBatch.id).where(ImportBatch.career_id == career_id, ImportBatch.sha256 == sha)
+    ):
+        return
+    result = importer.preview(session, career_id, "DEMO_EXTENDED_HISTORY.csv", content)
+    if result["errors"] or result["conflicts"]:
+        return  # Preserve any explicit edits to the sandbox rather than silently replacing them.
+    batch = importer.commit(session, career_id, result["preview_token"], "reject")
+    for stat in session.scalars(
+        select(HistoricalStat).where(HistoricalStat.source_batch_id == batch["batch_id"])
+    ):
+        stat.coverage = "DEMO_SYNTHETIC"
 
 
 class DemoSimulator:

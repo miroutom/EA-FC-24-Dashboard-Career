@@ -1,5 +1,197 @@
 @import "tailwindcss";
 
+.analytics-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  gap: 20px;
+  margin-bottom: 20px;
+}
+.analytics-grid .panel {
+  margin: 0;
+}
+.chart-badge {
+  background: #35528425;
+  border: 1px solid #4668a13d;
+  color: #91b4ee;
+  font-size: 9px;
+  padding: 5px 8px;
+  border-radius: 5px;
+  white-space: nowrap;
+}
+.attack-chart,
+.scatter-plot {
+  width: 100%;
+  min-width: 0;
+}
+.chart-caption {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  font-size: 10px;
+  color: #8da3c5;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+.chart-caption > span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.chart-caption small {
+  font-size: 9px;
+  margin-left: auto;
+}
+.donut-wrap {
+  position: relative;
+}
+.donut-center {
+  position: absolute;
+  left: 50%;
+  top: 127px;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  pointer-events: none;
+}
+.donut-center strong {
+  display: block;
+  font-size: 32px;
+  font-weight: 650;
+  letter-spacing: -1px;
+  color: #e7efff;
+}
+.donut-center > span {
+  font-size: 9px;
+  color: #7e94b4;
+  display: block;
+  margin-top: 5px;
+}
+.role-legend {
+  display: grid;
+  gap: 11px;
+  margin: 2px 4px 0;
+}
+.role-legend > div {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 10px;
+  color: #91a5c5;
+}
+.role-legend strong {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 600;
+  color: #d6e4fb;
+}
+.role-legend small {
+  width: 43px;
+  text-align: right;
+  font-size: 10px;
+  color: #6d84a7;
+}
+.role-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+.chart-footnote {
+  font-size: 9px;
+  color: #7186a8;
+  margin-top: 15px;
+  line-height: 1.8;
+}
+.productivity-panel {
+  grid-column: 1/-1;
+}
+.productivity-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 225px;
+  align-items: center;
+  gap: 24px;
+}
+.efficiency-card {
+  background: linear-gradient(145deg, #304e7c35, #192437);
+  border: 1px solid #3f619c40;
+  padding: 22px;
+  border-radius: 9px;
+}
+.efficiency-card > span {
+  font-size: 8px;
+  letter-spacing: 0.9px;
+  color: #789ac9;
+}
+.efficiency-card > strong {
+  display: block;
+  font-size: 49px;
+  line-height: 1.1;
+  font-weight: 650;
+  letter-spacing: -1.7px;
+  color: #90b6ff;
+  margin: 17px 0 9px;
+}
+.efficiency-card h3 {
+  font-size: 13px;
+  color: #d4e3ff;
+  margin-bottom: 10px;
+}
+.efficiency-card p {
+  font-size: 10px;
+  line-height: 1.8;
+  color: #8ca4c7;
+}
+.efficiency-card small {
+  display: block;
+  margin-top: 19px;
+  font-size: 9px;
+  color: #627c9f;
+  line-height: 1.7;
+}
+.scatter-tooltip {
+  background: #202a3c;
+  border: 1px solid #42516d;
+  border-radius: 9px;
+  padding: 13px 16px;
+  box-shadow: 0 10px 30px #0005;
+}
+.scatter-tooltip strong {
+  display: block;
+  font-size: 12px;
+  color: #dfebff;
+  margin-bottom: 7px;
+}
+.scatter-tooltip p {
+  font-size: 10px;
+  color: #9db2d1;
+  line-height: 1.8;
+}
+@media (max-width: 1050px) {
+  .analytics-grid {
+    grid-template-columns: 1fr;
+  }
+  .productivity-layout {
+    grid-template-columns: minmax(0, 1fr) 190px;
+    gap: 10px;
+  }
+  .efficiency-card {
+    padding: 16px;
+  }
+}
+@media (max-width: 800px) {
+  .productivity-layout {
+    grid-template-columns: 1fr;
+  }
+  .efficiency-card {
+    display: none;
+  }
+  .chart-caption small {
+    margin-left: 0;
+  }
+  .analytics-grid {
+    gap: 16px;
+  }
+}
+
 .demo-banner {
   display: flex;
   align-items: center;
