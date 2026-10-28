@@ -39,3 +39,33 @@ luac.out
 *.x86_64
 *.hex
 
+
+# Leicester City Analytics
+# Local data and credentials
+.env
+data/
+*.sqlite3*
+collectors/fc24-live-editor/config.lua
+
+# Dependencies and outputs
+.venv/
+node_modules/
+frontend/dist/
+frontend/test-results/
+frontend/playwright-report/
+*.tsbuildinfo
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.DS_Store
+.idea/
+luac.out
+*.src.rock
+*.zip
+*.tar.gz
+*.o
+*.so
+*.dll
+*.exe
