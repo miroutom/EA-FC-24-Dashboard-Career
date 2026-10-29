@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 
+import pytest
 from lupa import LuaRuntime
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -90,10 +91,11 @@ def test_lua_does_not_scan_optional_db_tables():
     assert payload["player_states"] == []
 
 
-def test_diagnostic_refuses_capture_without_manual_ack(tmp_path):
+@pytest.mark.parametrize("ack", [False, True])
+def test_diagnostic_refuses_capture_even_with_legacy_ack(tmp_path, ack):
     for file in ("common.lua", "diagnostic.lua"):
         (tmp_path / file).write_text((COLLECTOR / file).read_text())
-    (tmp_path / "config.lua").write_text("return {manual_capture_ack=false}")
+    (tmp_path / "config.lua").write_text("return {manual_capture_ack=" + str(ack).lower() + "}")
     lua = LuaRuntime()
     lua.globals().LCA_ROOT = str(tmp_path)
     lua.execute("stats_calls=0; function GetPlayersStats() stats_calls=stats_calls+1; return {} end")
@@ -101,7 +103,7 @@ def test_diagnostic_refuses_capture_without_manual_ack(tmp_path):
     assert lua.globals().stats_calls == 0
 
 
-def test_probe_does_not_duplicate_callbacks():
+def test_probe_ignores_legacy_ack_and_never_loads_le_modules():
     lua = LuaRuntime()
     lua.globals().LCA_ROOT = str(COLLECTOR)
     lua.globals().LCA_UNSAFE_EVENT_PROBE_ACK = True
@@ -118,8 +120,8 @@ def test_probe_does_not_duplicate_callbacks():
     """)
     lua.execute((COLLECTOR / "event_probe.lua").read_text())
     lua.execute((COLLECTOR / "event_probe.lua").read_text())
-    assert lua.globals().registered == 1
-    assert lua.globals().enum_loads == 2
+    assert lua.globals().registered == 0
+    assert lua.globals().enum_loads == 0
 
 
 def test_probe_refuses_registration_without_unsafe_ack():
@@ -133,7 +135,7 @@ def test_probe_refuses_registration_without_unsafe_ack():
 def test_collector_stays_hard_disabled_after_live_callback_failure(tmp_path):
     for file in ("common.lua", "collector.experimental.lua"):
         (tmp_path / file).write_text((COLLECTOR / file).read_text())
-    (tmp_path / "config.lua").write_text("return {enabled=false}")
+    (tmp_path / "config.lua").write_text("return {enabled=true,transport_verified=true,triggers_verified=true,context_reader_verified=true}")
     lua = LuaRuntime()
     lua.globals().LCA_ROOT = str(tmp_path)
     lua.execute("registered=0; function AddEventHandler() registered=registered+1 end")
@@ -150,3 +152,20 @@ def test_diff_negative_not_reported_as_negative_goal():
     before = {"rows": [{"playerid": 1, "teamid": 95, "compobjid": 2, "app": 10, "goals": 8}]}
     after = {"rows": [{"playerid": 1, "teamid": 95, "compobjid": 2, "app": 10, "goals": 3}]}
     assert module.compare(before, after)[0]["delta"] is None
+
+
+def test_snapshot_never_calls_potentially_mutating_get_save_uid():
+    lua = LuaRuntime(unpack_returned_tuples=True)
+    lua.execute("""
+      uid_calls=0
+      function IsInCM() return true end
+      function GetUserTeamID() return 191 end
+      function GetPlayersStats() return {} end
+      function GetSaveUID() uid_calls=uid_calls+1; return 'would-create-db-record' end
+    """)
+    core = lua.execute((COLLECTOR / "common.lua").read_text())
+    config = lua.table_from({"instance_key": "test-binding", "save_uid_verified": True})
+    payload = json.loads(core.json(core.snapshot(config, "offline_harness")))
+    assert lua.globals().uid_calls == 0
+    assert payload["save_uid"] is None
+    assert payload["instance_key"] == "test-binding"

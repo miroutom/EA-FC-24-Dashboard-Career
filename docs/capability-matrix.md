@@ -1,3 +1,8 @@
+> 2026-10-29 crash review: [12 minidumps](crash-investigation-2026-10-29.md)
+> confirm the load-failure signature, not a causal Lua/OCR operation. Runtime
+> entrypoints are now hard-disabled; old local acknowledgements do not enable them.
+> Full P0 save/load safety and P2 remain blocked.
+
 # Capability matrix — 2026-10-28
 
 Historical diagnostic values: **P0 OBSERVED** on 2026-10-28. All in-game Lua collection: **blocked on save safety**.

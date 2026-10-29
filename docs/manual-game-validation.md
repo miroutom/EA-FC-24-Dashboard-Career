@@ -1,3 +1,8 @@
+> Recovery hold — 2026-10-29: this protocol is a future qualification plan,
+> not an instruction to rerun blocked Lua scripts. Follow
+> [Windows recovery](../WINDOWS_CODEX_CRASH_RECOVERY.md) first.
+> No safe in-game capture path or repaired save has been established.
+
 # Phase 0: Windows + actual game protocol
 
 > **BLOCKED on the validated installation (2026-10-29).** Do not execute this

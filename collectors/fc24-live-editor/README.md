@@ -1,21 +1,30 @@
-# Read-only FC24 Lua tooling
+# Experimental FC24 Lua tooling — recovery hold, 2026-10-29
 
-Start with [Windows validation](../../docs/manual-game-validation.md) and [capabilities](../../docs/capability-matrix.md).
+Read [the crash investigation](../../docs/crash-investigation-2026-10-29.md)
+and [Windows recovery task](../../WINDOWS_CODEX_CRASH_RECOVERY.md) first.
 
-Files:
-- common.lua: guarded getters, JSON escaping/null preservation, own-team filtering, temporary file and rename. Optional direct DB-table scans are disabled.
-- diagnostic.lua: capability/type checks and a snapshot harness. It is disabled unless a local manual acknowledgement is deliberately set.
-- event_probe.lua: historical P0 event logger. It is now guarded by an explicit unsafe acknowledgement because callback sessions were followed by save reload failures on the validated build. Never run it on a valued save.
-- collector.experimental.lua: hard-disabled after real evidence that snapshot work inside CareerModeEvent callbacks can leave a save unable to reload. It registers no handler.
-- config.example.lua: local configuration template. config.lua is ignored by Git to protect paths and identifiers.
+The user reports reproducible career-load crashes. All 12 supplied dumps record
+the same FC24 instruction. Neither OCR causality nor a specific Lua operation
+has been established. A previous single successful reload does not establish
+collector safety.
 
-Do not run this in a valued career. The historical invocation was:
+- `diagnostic.lua`, `event_probe.lua`, and `collector.experimental.lua` are disabled.
+  The first two ignore old local acknowledgements, load no LE modules, and call no
+  game API. No handler is registered. Do not re-enable them for recovery.
+- Updating files does not remove callbacks already installed in a running Lua VM.
+  Close the game and Live Editor normally before testing a copy of a save.
+  Do not clear other scripts' handlers.
+- `common.lua` remains an offline-testable serialization/transport implementation.
+  Its snapshot function is not a qualified production capture path. Unused optional
+  table traversal code has been removed.
+- `GetSaveUID` is never called, even with a stale `save_uid_verified=true` config.
+  Upstream documents that it can create an entry in `sponsors`; it is not a pure
+  getter. Use explicit `instance_key`. Existing snapshot/save identifiers remain intact.
+- `config.lua` stays local/ignored. None of its verification flags establishes
+  runtime compatibility, save integrity, or successful automation.
 
-```lua
-LCA_ROOT = 'C:/MyProjects/EA-FC-24-Dashboard-Career/collectors/fc24-live-editor'
-dofile(LCA_ROOT .. '/diagnostic.lua')
-```
-
-Collector `0.3.1-safe` no longer traverses optional league, injury or rating-history DB tables. The optional arrays are always empty. Card and goalkeeper season counters can still be preserved when the single installed `GetPlayersStats` call returns them, but no further in-game validation is authorized on the current save.
-
-Historical P0 values were captured, but both callback sessions and a repeated extended manual diagnostic session failed save/reload safety. Do not run `diagnostic.lua`, `event_probe.lua`, or `collector.experimental.lua` in normal gameplay. File delivery failures are logged without local path contents. The exact game versions and failures are recorded in the manual evidence report.
+The automatic JSON watcher and dashboard remain usable on archived snapshots.
+Screenshot OCR is an optional offline evidence tool, not a replacement for the
+requested unattended game collection. P2 remains blocked. Further development
+requires a confirmed game/LE combination, a verified execution mechanism and
+repeatable save/load checks on a disposable career.

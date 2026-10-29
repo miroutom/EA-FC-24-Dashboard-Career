@@ -70,3 +70,8 @@ luac.out
 *.so
 *.dll
 *.exe
+
+# Local crash evidence can contain private process memory
+*.mdmp
+*.dmp
+*.rar

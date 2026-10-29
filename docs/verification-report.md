@@ -50,3 +50,25 @@ The user authorized synthetic demo data. A separate data-demo sandbox now seeds 
 ## Follow-up: richer demo charts and local-only runtime
 
 Added three synthetic historical seasons idempotently (8 seasons total) and three overview plots: stacked goals/assists leaders, observed-goal distribution by role, and appearances vs goal contributions. Charts share career/season/competition filters and exclude unknown counters without filling them with zeros. Regression checks: 49 backend tests, 10 frontend tests, production build and the extended demo browser scenario passed. The browser scenario checks chart geometry, watcher-driven UI updates, layout at 768px, and zero HTTP(S) requests to external hosts. Local inspection found no cloudflared process; the demo listener was bound to 127.0.0.1:8001. The application starts no external tunnel.
+
+
+## Crash investigation and recovery hold — 2026-10-29
+
+Reviewed Windows branch `b2b8584` and all 12 user-supplied minidumps on macOS.
+All record `FC24.exe+0x13EBA2F`, read access violation `0xC0000005` at address
+`0x2` or `0x3`; LLDB independently confirmed the last exception/context. The
+minidumps do not identify the causal Lua/OCR operation or establish save repair.
+See [the investigation](crash-investigation-2026-10-29.md) and
+[Windows recovery task](../WINDOWS_CODEX_CRASH_RECOVERY.md).
+
+Removed potentially mutating `GetSaveUID` from capture and unused optional DB
+scans. Runtime entrypoints are closed regardless of stale local acknowledgement
+flags. Existing handlers require a complete game/LE restart; no runtime handler
+manipulation was attempted. OCR remains optional offline evidence, not P2.
+
+Verification: **78 backend tests passed**, including synthetic binary-format
+fixtures, Lua holds and the full migration roundtrip; **10 frontend tests passed**;
+production TypeScript/Vite build and Ruff passed. The existing large-bundle and
+Starlette/httpx deprecation warnings remain. Windows game loading, recovery of the
+affected save, actual WinRT OCR and unattended collection were **not performed**
+here. No raw dumps, game binaries or save files were committed.

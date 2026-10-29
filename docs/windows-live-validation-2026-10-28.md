@@ -1,3 +1,9 @@
+> Later review — 2026-10-29: [all 12 minidumps](crash-investigation-2026-10-29.md)
+> show the same FC24 instruction, including sessions without LCA output. The
+> observations below do not establish which operation causes the load failure.
+> Earlier wording claiming that one successful reload proves manual capture safe,
+> or that callback capture is the proven cause, is superseded by this review.
+
 # Windows live validation evidence — 2026-10-28
 
 ## Scope and versions
@@ -87,7 +93,7 @@ A controlled retry after a full game/Live Editor restart crashed on the same car
 
 Both affected career files were copied to the ignored local preflight backup before further testing. The event probe was also optimized to cache installed symbol names instead of rescanning Lua globals for every event. It must not be used during recovery or on a valued career. Reload stability for a fresh disposable test save remains to be established after any future diagnostic step.
 
-A fresh disposable RB Salzburg career was then created with a new explicit instance binding. It reloaded before any LCA code, produced a diagnostic snapshot at `2024-07-01`, was saved to a separate slot, and reloaded successfully afterward. The payload was imported only into the new dashboard career; the corrupted save's snapshots were unchanged. This controlled check confirms that `diagnostic.lua` and its external JSON write do not by themselves corrupt a career save. The original save corruption remains unexplained; the old high-volume event-probe session is not proof of causality and will not be repeated on the replacement save.
+A fresh disposable RB Salzburg career was then created with a new explicit instance binding. It reloaded before any LCA code, produced a diagnostic snapshot at `2024-07-01`, was saved to a separate slot, and reloaded successfully afterward. The payload was imported only into the new dashboard career; the corrupted save's snapshots were unchanged. This single controlled check observed a successful reload; it does not establish that repeated diagnostics are safe. The original save corruption remains unexplained; the old high-volume event-probe session is not proof of causality and will not be repeated on the replacement save.
 
 ## Callback safety failure
 

@@ -1,3 +1,9 @@
+> **Обновление 2026-10-29:** после воспроизводимых вылетов при загрузке карьеры
+> сначала выполнить [WINDOWS_CODEX_CRASH_RECOVERY.md](WINDOWS_CODEX_CRASH_RECOVERY.md).
+> Приведённые ниже команды запуска diagnostic/event probe архивные и сейчас
+> не выполняются. Старые acknowledgement/verification flags не снимают блокировку.
+> Установка dashboard и offline-тесты остаются применимыми.
+
 # Задание Codex: подготовить Leicester City Analytics на Windows до запуска EA FC 24
 
 ## Твоя задача
