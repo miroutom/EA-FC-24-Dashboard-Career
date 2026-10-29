@@ -16,6 +16,14 @@ class Settings(BaseSettings):
     http_port: int = 8000
     stale_seconds: int = 300
     max_file_bytes: int = 5 * 1024 * 1024
+    screenshot_watcher_enabled: bool = False
+    screenshot_watch_dir: Path | None = None
+    screenshot_career_id: int | None = None
+    screenshot_save_id: int | None = None
+    screenshot_season_id: int | None = None
+    screenshot_club_team_id: int | None = None
+    screenshot_club_name: str = "RB Salzburg"
+    screenshot_quiet_seconds: int = 30
 
 
 class Base(DeclarativeBase):

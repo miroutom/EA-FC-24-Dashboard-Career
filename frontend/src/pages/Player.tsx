@@ -22,6 +22,39 @@ function PlayerContent({ player }: { player: PlayerDTO }) {
             <Kpi label="Ассисты" value={player.assists} />
             <Kpi label="Г+П" value={player.goal_contributions} />
           </div>
+          {player.live && (
+            <section className="panel">
+              <div className="panel-heading">
+                <div>
+                  <h3>Live-состояние игрока</h3>
+                  <p>
+                    Экспериментальные поля FC 24; значения не пересчитываются
+                    вручную
+                  </p>
+                </div>
+                <span className="pill">experimental</span>
+              </div>
+              <div className="kpis player-kpis">
+                <Kpi label="Жёлтые" value={player.live.yellow} />
+                <Kpi label="2ЖК" value={player.live.two_yellow} />
+                <Kpi label="Красные" value={player.live.red} />
+                <Kpi label="Игрок матча" value={player.live.motm} />
+                <Kpi label="Сейвы" value={player.live.saves} />
+                <Kpi label="Пропущено" value={player.live.goals_conceded} />
+              </div>
+              <p className="muted">
+                Последний матч: {fmt(player.live.last_match_minutes)} мин. ·
+                OVR-снимок: {fmt(player.live.last_match_overall)} · оценка raw:{" "}
+                {fmt(player.live.latest_match_rating_raw)} · минут в истории
+                оценки: {fmt(player.live.latest_match_rating_minutes)}
+              </p>
+              <p className="muted">
+                Травма raw ID: {fmt(player.live.injury_id)} · длительность:{" "}
+                {fmt(player.live.injury_duration_days)} дн. · дата raw:{" "}
+                {fmt(player.live.injury_date_raw)}
+              </p>
+            </section>
+          )}
           <p className="muted">
             {player.seasons_count} учтённых сезонов · {player.first_season} —{" "}
             {player.last_season}

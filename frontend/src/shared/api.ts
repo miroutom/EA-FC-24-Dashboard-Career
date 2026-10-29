@@ -17,6 +17,27 @@ export type History = {
   coverage: string;
   source_scope: string;
 };
+export type LivePlayer = {
+  yellow: Metric;
+  two_yellow: Metric;
+  red: Metric;
+  saves: Metric;
+  goals_conceded: Metric;
+  motm: Metric;
+  avg_raw: Metric;
+  injury_id: Metric;
+  injury_date_raw: Metric;
+  injury_duration_days: Metric;
+  last_match_minutes: Metric;
+  last_match_overall: Metric;
+  last_match_fact: Metric;
+  last_match_position: Metric;
+  latest_match_rating_raw: Metric;
+  latest_match_rating_minutes: Metric;
+  latest_match_rating_date_raw: Metric;
+  observed_at: string | null;
+  data_quality: string;
+};
 export type Player = {
   id: number;
   name: string;
@@ -48,6 +69,7 @@ export type Player = {
     source: string;
     coverage: string;
   }[];
+  live: LivePlayer | null;
 };
 export type Players = {
   items: Player[];
@@ -63,6 +85,52 @@ export type Dashboard = Players & {
   seasons_count: number;
   chart: History[];
   leaders: Player[];
+  team_matches: {
+    matches: number;
+    wins: number;
+    draws: number;
+    losses: number;
+    goals_for: number;
+    goals_against: number;
+    points: number;
+    points_per_game: number;
+    avg_xg: Metric;
+    avg_xga: Metric;
+    avg_possession: Metric;
+    recent_results: {
+      result: "W" | "D" | "L";
+      played_at: string | null;
+      opponent: string | null;
+      club_goals: Metric;
+      opponent_goals: Metric;
+    }[];
+    coverage: string;
+  } | null;
+  xg: Metric;
+  team_form: {
+    season_id: number;
+    records: {
+      league_id: number;
+      matches_played: Metric;
+      wins: Metric;
+      draws: Metric;
+      losses: Metric;
+      goals_for: Metric;
+      goals_against: Metric;
+      points: Metric;
+      table_position: Metric;
+      observed_at: string | null;
+    }[];
+    recent_results: {
+      result: "W" | "D" | "L";
+      league_id: number;
+      observed_at: string | null;
+      source: string;
+    }[];
+    warnings: string[];
+    coverage: string;
+    data_quality: string;
+  } | null;
   coverage: string;
 };
 export type Save = {
@@ -118,6 +186,96 @@ export type Filters = {
   competition_id?: number;
   save_id?: number;
   as_of?: string;
+};
+
+export type MatchTeamStats = {
+  possession: Metric;
+  xg: Metric;
+  shots: Metric;
+  shots_on_target: Metric;
+  shots_off_target: Metric;
+  blocked_shots: Metric;
+  shot_accuracy: Metric;
+  passes: Metric;
+  completed_passes: Metric;
+  pass_accuracy: Metric;
+  tackles: Metric;
+  tackles_won: Metric;
+  interceptions: Metric;
+  saves: Metric;
+  fouls: Metric;
+  offsides: Metric;
+  dribbles: Metric;
+  successful_dribbles: Metric;
+  dribble_success: Metric;
+  ball_recovery_seconds: Metric;
+  penalties: Metric;
+  yellow_cards: Metric;
+  red_cards: Metric;
+  injuries: Metric;
+};
+export type MatchEvent = {
+  minute: number;
+  kind: "goal" | "substitution" | "yellow" | "red" | "injury";
+  team: "club" | "opponent";
+  player: string;
+  secondary_player: string | null;
+  detail: string | null;
+};
+export type MatchPlayer = {
+  external_player_id: number | null;
+  name: string;
+  position: string | null;
+  overall: Metric;
+  rating: Metric;
+  goals: Metric;
+  assists: Metric;
+  started: boolean | null;
+  substitute: boolean | null;
+  motm: boolean | null;
+};
+export type MatchEvidence = {
+  id: number;
+  career_save_id: number;
+  season_id: number;
+  source_external_match_id: string | null;
+  played_at: string | null;
+  home_goals: Metric;
+  away_goals: Metric;
+  verified_source: string;
+  external_compobjid: number | null;
+  competition_name: string | null;
+  club_team_external_id: number | null;
+  opponent_name: string | null;
+  club_was_home: boolean | null;
+  club_goals: Metric;
+  opponent_goals: Metric;
+  duration_minutes: Metric;
+  result: "W" | "D" | "L" | null;
+  team_stats: MatchTeamStats;
+  opponent_stats: MatchTeamStats;
+  timeline: MatchEvent[];
+  player_performances: MatchPlayer[];
+  screenshot_paths: string[];
+  screenshot_urls: string[];
+  evidence: { note?: string; sources?: string[] };
+};
+export type MatchDraft = {
+  draft_version: number;
+  id: string;
+  status: "NEEDS_REVIEW";
+  source: string;
+  classification_counts: Record<string, number>;
+  confidence: {
+    score: string;
+    team_stats: string;
+    players: string;
+    player_roster_match_min: number | null;
+    timeline: string;
+  };
+  warnings: string[];
+  match: MatchEvidence;
+  screenshot_urls: string[];
 };
 
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {

@@ -6,6 +6,7 @@ import {
   CircleHelp,
   FolderOpen,
   LayoutDashboard,
+  ListOrdered,
   Users,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
@@ -18,6 +19,7 @@ import {
 } from "react-router-dom";
 import { Careers } from "./pages/Careers";
 import { Compare } from "./pages/Compare";
+import { Matches } from "./pages/Matches";
 import { PlayerDrawer, PlayerProfile } from "./pages/Player";
 import { Squad } from "./pages/Squad";
 import { Summary } from "./pages/Summary";
@@ -68,11 +70,21 @@ export function App() {
       ),
     enabled: !!career,
   });
+  const onlyCompetitionId =
+    competitions.data?.length === 1 ? competitions.data[0].id : undefined;
   const location = useLocation();
   useEffect(() => {
     setFilters({});
     setSelected(null);
   }, [career?.id]);
+  useEffect(() => {
+    if (onlyCompetitionId && !filters.competition_id) {
+      setFilters((current) => ({
+        ...current,
+        competition_id: onlyCompetitionId,
+      }));
+    }
+  }, [onlyCompetitionId, filters.competition_id]);
   const choose = (id: number) => {
     localStorage.setItem("careerId", String(id));
     setCareerId(id);
@@ -80,6 +92,7 @@ export function App() {
     setSelected(null);
   };
   const nav = [
+    ["/matches", ListOrdered, "Матчи"],
     ["/", LayoutDashboard, "Обзор карьеры"],
     ["/squad", Users, "Состав и история"],
     ["/compare", ArrowLeftRight, "Сравнение"],
@@ -284,6 +297,7 @@ export function App() {
                 value={{ career, filters, selected, selectPlayer }}
               >
                 <Routes>
+                  <Route path="/matches" element={<Matches />} />
                   <Route path="/" element={<Summary />} />
                   <Route path="/squad" element={<Squad key={career.id} />} />
                   <Route path="/players/:id" element={<PlayerProfile />} />

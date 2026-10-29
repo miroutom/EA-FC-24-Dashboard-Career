@@ -4,7 +4,7 @@ import pytest
 from conftest import snapshot
 from sqlalchemy import func, select
 
-from app.models import InferredDelta, QueueItem, Snapshot
+from app.models import InferredDelta, PlayerStateSnapshot, QueueItem, Snapshot, TeamStateSnapshot
 
 
 def ingest(app, doc):
@@ -152,6 +152,172 @@ def test_as_of_uses_latest_cumulative(app, client, career, save):
     ingest(app, snapshot(goals=4))
     ingest(app, snapshot(goals=6, apps=11, day=2))
     assert dashboard(client, career, "?as_of=2026-10-01T13:00:00Z")["kpis"]["goals"] == 4
+
+
+def test_optional_live_state_and_exact_team_result_delta(app, client, career, save):
+    first = snapshot(day=1)
+    first["rows"][0].update({"two_yellow": 0, "saves": 2, "goals_conceded": 1, "motm": 0})
+    first["team_states"] = [
+        {
+            "teamid": 95,
+            "leagueid": 201,
+            "nummatchesplayed": 1,
+            "homewins": 1,
+            "homedraws": 0,
+            "homelosses": 0,
+            "awaywins": 0,
+            "awaydraws": 0,
+            "awaylosses": 0,
+            "homegf": 2,
+            "homega": 1,
+            "awaygf": 0,
+            "awayga": 0,
+            "points": 3,
+            "currenttableposition": 2,
+        }
+    ]
+    first["player_states"] = [
+        {
+            "playerid": 12345,
+            "teamid": 95,
+            "display_name": "Synthetic Player",
+            "injury_id": 0,
+            "last_match_minutes": 90,
+            "latest_match_rating_raw": 74,
+        }
+    ]
+    ingest(app, first)
+
+    second = snapshot(apps=11, goals=5, day=2)
+    second["rows"][0].update({"two_yellow": 1, "saves": 3, "goals_conceded": 2, "motm": 1})
+    second["team_states"] = [
+        {
+            "teamid": 95,
+            "leagueid": 201,
+            "nummatchesplayed": 2,
+            "homewins": 1,
+            "homedraws": 1,
+            "homelosses": 0,
+            "awaywins": 0,
+            "awaydraws": 0,
+            "awaylosses": 0,
+            "homegf": 3,
+            "homega": 2,
+            "awaygf": 0,
+            "awayga": 0,
+            "points": 4,
+            "currenttableposition": 3,
+        }
+    ]
+    second["player_states"] = [
+        {
+            "playerid": 12345,
+            "teamid": 95,
+            "display_name": "Synthetic Player",
+            "injury_id": 4,
+            "injury_date_raw": 120,
+            "injury_duration_days": 7,
+            "last_match_minutes": 88,
+            "last_match_overall": 79,
+            "last_match_fact": 1,
+            "last_match_position": 9,
+            "latest_match_rating_raw": 82,
+            "latest_match_rating_minutes": 88,
+            "latest_match_rating_date_raw": 20240810,
+        }
+    ]
+    ingest(app, second)
+
+    data = dashboard(client, career)
+    assert data["team_form"]["records"][0] == {
+        "league_id": 201,
+        "matches_played": 2,
+        "wins": 1,
+        "draws": 1,
+        "losses": 0,
+        "goals_for": 3,
+        "goals_against": 2,
+        "points": 4,
+        "table_position": 3,
+        "observed_at": "2026-10-02T12:00:00+00:00",
+    }
+    assert data["team_form"]["recent_results"][0]["result"] == "D"
+    assert data["items"][0]["live"]["two_yellow"] == 1
+    assert data["items"][0]["live"]["motm"] == 1
+    assert data["items"][0]["live"]["injury_id"] == 4
+    assert data["items"][0]["live"]["latest_match_rating_raw"] == 82
+    with app.state.factory() as db:
+        assert db.scalar(select(func.count()).select_from(TeamStateSnapshot)) == 2
+        assert db.scalar(select(func.count()).select_from(PlayerStateSnapshot)) == 2
+
+
+def test_team_result_is_not_inferred_across_snapshot_gap(app, client, career, save):
+    first = snapshot(
+        day=1,
+        team_states=[
+            {
+                "teamid": 95,
+                "leagueid": 201,
+                "nummatchesplayed": 1,
+                "homewins": 1,
+                "homedraws": 0,
+                "homelosses": 0,
+                "awaywins": 0,
+                "awaydraws": 0,
+                "awaylosses": 0,
+            }
+        ],
+    )
+    ingest(app, first)
+    second = snapshot(
+        apps=12,
+        day=2,
+        team_states=[
+            {
+                "teamid": 95,
+                "leagueid": 201,
+                "nummatchesplayed": 3,
+                "homewins": 2,
+                "homedraws": 0,
+                "homelosses": 0,
+                "awaywins": 0,
+                "awaydraws": 0,
+                "awaylosses": 1,
+            }
+        ],
+    )
+    ingest(app, second)
+    assert dashboard(client, career)["team_form"]["recent_results"] == []
+
+
+def test_inconsistent_league_link_is_hidden_from_team_record(app, client, career, save):
+    ingest(
+        app,
+        snapshot(
+            team_states=[
+                {
+                    "teamid": 95,
+                    "leagueid": 201,
+                    "nummatchesplayed": 10,
+                    "homewins": 0,
+                    "homedraws": 0,
+                    "homelosses": 0,
+                    "awaywins": 0,
+                    "awaydraws": 0,
+                    "awaylosses": 0,
+                    "homegf": 0,
+                    "homega": 0,
+                    "awaygf": 0,
+                    "awayga": 0,
+                }
+            ]
+        ),
+    )
+    data = dashboard(client, career)
+    assert data["team_form"]["records"] == []
+    expected = "FC 24: leagueteamlinks не содержит согласованную live-таблицу; W/D/L скрыты"
+    assert data["team_form"]["warnings"] == [expected]
+    assert expected in data["warnings"]
 
 
 def test_inconsistent_growth_marked_invalid(app, client, career, save):

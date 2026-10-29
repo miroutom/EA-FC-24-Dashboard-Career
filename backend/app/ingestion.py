@@ -13,12 +13,14 @@ from .models import (
     CareerSave,
     Competition,
     InferredDelta,
+    PlayerStateSnapshot,
     QueueItem,
     SaveBranch,
     Season,
     Snapshot,
     SnapshotRow,
     SyncEvent,
+    TeamStateSnapshot,
 )
 from .schemas import SnapshotInput
 from .services import digest, live_player, season
@@ -136,6 +138,14 @@ class Ingestor:
                         [r.model_dump() for r in doc.rows],
                         key=lambda r: (r["playerid"], r["teamid"], r["compobjid"]),
                     ),
+                    "team_states": sorted(
+                        [r.model_dump() for r in doc.team_states],
+                        key=lambda r: (r["teamid"], r["leagueid"]),
+                    ),
+                    "player_states": sorted(
+                        [r.model_dump() for r in doc.player_states],
+                        key=lambda r: (r["playerid"], r["teamid"]),
+                    ),
                 }
             )
             branch = binding.active_branch_no
@@ -231,8 +241,12 @@ class Ingestor:
                     goals=incoming.goals,
                     assists=incoming.assists,
                     yellow=incoming.yellow,
+                    two_yellow=incoming.two_yellow,
                     red=incoming.red,
                     clean_sheets=incoming.clean_sheets,
+                    saves=incoming.saves,
+                    goals_conceded=incoming.goals_conceded,
+                    motm=incoming.motm,
                     avg_raw=incoming.avg,
                 )
                 session.add(row)
@@ -268,6 +282,51 @@ class Ingestor:
                                 confidence=confidence,
                             )
                         )
+            for incoming in doc.team_states:
+                session.add(
+                    TeamStateSnapshot(
+                        snapshot_id=snap.id,
+                        team_external_id=incoming.teamid,
+                        league_external_id=incoming.leagueid,
+                        matches_played=incoming.nummatchesplayed,
+                        home_wins=incoming.homewins,
+                        home_draws=incoming.homedraws,
+                        home_losses=incoming.homelosses,
+                        away_wins=incoming.awaywins,
+                        away_draws=incoming.awaydraws,
+                        away_losses=incoming.awaylosses,
+                        home_goals_for=incoming.homegf,
+                        home_goals_against=incoming.homega,
+                        away_goals_for=incoming.awaygf,
+                        away_goals_against=incoming.awayga,
+                        points=incoming.points,
+                        table_position=incoming.currenttableposition,
+                        last_game_result_raw=incoming.lastgameresult,
+                        form=incoming.teamform,
+                        short_form=incoming.teamshortform,
+                        long_form=incoming.teamlongform,
+                    )
+                )
+            for incoming in doc.player_states:
+                player = live_player(session, binding.career_id, incoming.playerid, incoming.display_name)
+                session.add(
+                    PlayerStateSnapshot(
+                        snapshot_id=snap.id,
+                        player_id=player.id,
+                        player_external_id=incoming.playerid,
+                        team_external_id=incoming.teamid,
+                        injury_id=incoming.injury_id,
+                        injury_date_raw=incoming.injury_date_raw,
+                        injury_duration_days=incoming.injury_duration_days,
+                        last_match_minutes=incoming.last_match_minutes,
+                        last_match_overall=incoming.last_match_overall,
+                        last_match_fact=incoming.last_match_fact,
+                        last_match_position=incoming.last_match_position,
+                        latest_match_rating_raw=incoming.latest_match_rating_raw,
+                        latest_match_rating_minutes=incoming.latest_match_rating_minutes,
+                        latest_match_rating_date_raw=incoming.latest_match_rating_date_raw,
+                    )
+                )
             item.status, item.error, item.updated_at = status, rollback_reason, now()
             session.add(
                 SyncEvent(

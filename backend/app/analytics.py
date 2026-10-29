@@ -7,20 +7,223 @@ from .models import (
     CareerSave,
     Competition,
     HistoricalStat,
+    Match,
     Player,
     PlayerSeasonMetadata,
+    PlayerStateSnapshot,
     Season,
     Snapshot,
     SnapshotRow,
+    TeamStateSnapshot,
 )
 from .services import Problem, career
 
 METRICS = ("appearances", "goals", "assists", "clean_sheets")
+LIVE_COUNTERS = ("yellow", "two_yellow", "red", "saves", "goals_conceded", "motm")
+TEAM_FORM_WARNING = (
+    "FC 24: leagueteamlinks не содержит согласованную live-таблицу; W/D/L скрыты"
+)
 
 
 def total(values):
     values = list(values)
     return sum(values) if values and all(v is not None for v in values) else None
+
+
+def live_context(session, career_id, season_id=None, save_id=None, as_of=None):
+    saves = session.scalars(select(CareerSave).where(CareerSave.career_id == career_id)).all()
+    if save_id is not None:
+        saves = [save for save in saves if save.id == save_id]
+    if len(saves) != 1:
+        return None, None
+    chosen = saves[0]
+    if season_id is not None:
+        selected_season = session.get(Season, season_id)
+        if not selected_season or selected_season.career_id != career_id:
+            return chosen, None
+        return chosen, selected_season
+    query = select(Snapshot.season_id).where(
+        Snapshot.career_save_id == chosen.id,
+        Snapshot.branch_no == chosen.active_branch_no,
+    )
+    if as_of:
+        query = query.where(Snapshot.captured_at <= as_of)
+    latest_season_id = session.scalar(
+        query.order_by(Snapshot.captured_at.desc(), Snapshot.id.desc()).limit(1)
+    )
+    return chosen, session.get(Season, latest_season_id) if latest_season_id else None
+
+
+def live_player_observations(
+    session,
+    career_id,
+    season_id=None,
+    competition_id=None,
+    as_of=None,
+    save_id=None,
+):
+    chosen, selected_season = live_context(session, career_id, season_id, save_id, as_of)
+    if not chosen or not selected_season:
+        return {}
+    external_comp = None
+    if competition_id is not None:
+        competition = session.get(Competition, competition_id)
+        if competition:
+            external_comp = competition.external_compobjid
+
+    grouped = defaultdict(list)
+    for row, snap in latest_rows(
+        session, chosen.id, chosen.active_branch_no, selected_season.id, as_of
+    ).values():
+        if external_comp is None or row.compobjid == external_comp:
+            grouped[row.player_id].append((row, snap))
+
+    result = {}
+    for player_id, pairs in grouped.items():
+        complete = all(snap.completeness == "COMPLETE" for _, snap in pairs)
+        allowed_total = external_comp is not None or (complete and chosen.verified_live)
+        latest_pair = max(pairs, key=lambda pair: (pair[1].captured_at, pair[1].id))
+        result[player_id] = {
+            **{
+                metric: total(getattr(row, metric) for row, _ in pairs) if allowed_total else None
+                for metric in LIVE_COUNTERS
+            },
+            "avg_raw": latest_pair[0].avg_raw if len(pairs) == 1 else None,
+            "observed_at": latest_pair[1].in_game_date or latest_pair[1].captured_at,
+            "data_quality": "experimental_live",
+        }
+
+    query = (
+        select(PlayerStateSnapshot, Snapshot)
+        .join(Snapshot, PlayerStateSnapshot.snapshot_id == Snapshot.id)
+        .where(
+            Snapshot.career_save_id == chosen.id,
+            Snapshot.branch_no == chosen.active_branch_no,
+            Snapshot.season_id == selected_season.id,
+        )
+    )
+    if as_of:
+        query = query.where(Snapshot.captured_at <= as_of)
+    for state, snap in session.execute(query.order_by(Snapshot.captured_at, Snapshot.id)):
+        current = result.setdefault(
+            state.player_id,
+            {
+                **{metric: None for metric in LIVE_COUNTERS},
+                "avg_raw": None,
+                "data_quality": "experimental_live",
+            },
+        )
+        current.update(
+            {
+                "injury_id": state.injury_id,
+                "injury_date_raw": state.injury_date_raw,
+                "injury_duration_days": state.injury_duration_days,
+                "last_match_minutes": state.last_match_minutes,
+                "last_match_overall": state.last_match_overall,
+                "last_match_fact": state.last_match_fact,
+                "last_match_position": state.last_match_position,
+                "latest_match_rating_raw": state.latest_match_rating_raw,
+                "latest_match_rating_minutes": state.latest_match_rating_minutes,
+                "latest_match_rating_date_raw": state.latest_match_rating_date_raw,
+                "observed_at": snap.in_game_date or snap.captured_at,
+            }
+        )
+    return result
+
+
+def _combined(row, home_field, away_field):
+    home, away = getattr(row, home_field), getattr(row, away_field)
+    return home + away if home is not None and away is not None else None
+
+
+def team_form(session, career_id, season_id=None, as_of=None, save_id=None, **_filters):
+    chosen, selected_season = live_context(session, career_id, season_id, save_id, as_of)
+    if not chosen or not selected_season:
+        return None
+    query = (
+        select(TeamStateSnapshot, Snapshot)
+        .join(Snapshot, TeamStateSnapshot.snapshot_id == Snapshot.id)
+        .where(
+            Snapshot.career_save_id == chosen.id,
+            Snapshot.branch_no == chosen.active_branch_no,
+            Snapshot.season_id == selected_season.id,
+        )
+    )
+    if as_of:
+        query = query.where(Snapshot.captured_at <= as_of)
+    observations = session.execute(query.order_by(Snapshot.captured_at, Snapshot.id)).all()
+    if not observations:
+        return None
+
+    latest_by_league = {}
+    previous_by_league = {}
+    inferred = []
+    warnings = []
+    for state, snap in observations:
+        league_id = state.league_external_id
+        current_counts = (
+            _combined(state, "home_wins", "away_wins"),
+            _combined(state, "home_draws", "away_draws"),
+            _combined(state, "home_losses", "away_losses"),
+        )
+        consistent = (
+            state.matches_played is not None
+            and all(value is not None for value in current_counts)
+            and sum(current_counts) == state.matches_played
+        )
+        if not consistent:
+            previous_by_league.pop(league_id, None)
+            if TEAM_FORM_WARNING not in warnings:
+                warnings.append(TEAM_FORM_WARNING)
+            continue
+        previous = previous_by_league.get(league_id)
+        if (
+            previous
+            and state.matches_played is not None
+            and previous[0] is not None
+            and state.matches_played == previous[0] + 1
+            and all(value is not None for value in (*current_counts, *previous[1]))
+        ):
+            deltas = tuple(current - old for current, old in zip(current_counts, previous[1]))
+            if deltas.count(1) == 1 and deltas.count(0) == 2:
+                inferred.append(
+                    {
+                        "result": ("W", "D", "L")[deltas.index(1)],
+                        "league_id": league_id,
+                        "observed_at": snap.in_game_date or snap.captured_at,
+                        "source": "aggregate_delta",
+                    }
+                )
+        previous_by_league[league_id] = (state.matches_played, current_counts)
+        latest_by_league[league_id] = (state, snap)
+
+    records = []
+    for league_id, (state, snap) in latest_by_league.items():
+        records.append(
+            {
+                "league_id": league_id,
+                "matches_played": state.matches_played,
+                "wins": _combined(state, "home_wins", "away_wins"),
+                "draws": _combined(state, "home_draws", "away_draws"),
+                "losses": _combined(state, "home_losses", "away_losses"),
+                "goals_for": _combined(state, "home_goals_for", "away_goals_for"),
+                "goals_against": _combined(state, "home_goals_against", "away_goals_against"),
+                "points": state.points,
+                "table_position": state.table_position,
+                "observed_at": snap.in_game_date or snap.captured_at,
+            }
+        )
+    records.sort(
+        key=lambda row: (row["matches_played"] is not None, row["matches_played"] or -1), reverse=True
+    )
+    return {
+        "season_id": selected_season.id,
+        "records": records,
+        "recent_results": inferred[-10:],
+        "warnings": warnings,
+        "coverage": "LEAGUE_AGGREGATES",
+        "data_quality": "experimental_live",
+    }
 
 
 def records(
@@ -137,6 +340,14 @@ def records(
 
 def players(session, career_id, **filters):
     rows, warnings, synced = records(session, career_id, **filters)
+    live_by_player = live_player_observations(
+        session,
+        career_id,
+        season_id=filters.get("season_id"),
+        competition_id=filters.get("competition_id"),
+        as_of=filters.get("as_of"),
+        save_id=filters.get("save_id"),
+    )
     grouped = defaultdict(list)
     for row in rows:
         grouped[row["player_id"]].append(row)
@@ -175,6 +386,7 @@ def players(session, career_id, **filters):
                 "potential": None,
                 "sources": sorted({h["source"] for h in history}),
                 "data_quality": sorted({h["data_quality"] for h in history}),
+                "live": live_by_player.get(player_id),
             }
         )
     observed_goals = total(p["goals"] for p in result)
@@ -239,6 +451,10 @@ def competition_history(
 
 def dashboard(session, career_id, **filters):
     data = players(session, career_id, **filters)
+    form = team_form(session, career_id, **filters)
+    match_summary = verified_match_summary(session, career_id, **filters)
+    if form and form["warnings"]:
+        data["warnings"] = list(dict.fromkeys([*data["warnings"], *form["warnings"]]))
     by_season = defaultdict(list)
     for player in data["items"]:
         for row in player["history"]:
@@ -256,9 +472,63 @@ def dashboard(session, career_id, **filters):
         "leaders": sorted(
             data["items"], key=lambda p: (p["goals"] is not None, p["goals"] or 0), reverse=True
         )[:5],
-        "team_matches": None,
-        "xg": None,
+        "team_matches": match_summary,
+        "xg": match_summary["avg_xg"] if match_summary else None,
+        "team_form": form,
         "coverage": "ДЕМО: все показатели вымышленные"
         if filters.get("demo_mode")
         else "Неполная история: только учтённые строки источника",
+    }
+
+
+def verified_match_summary(session, career_id, **filters):
+    query = select(Match).join(CareerSave).where(CareerSave.career_id == career_id)
+    if filters.get("season_id") is not None:
+        query = query.where(Match.season_id == filters["season_id"])
+    if filters.get("save_id") is not None:
+        query = query.where(Match.career_save_id == filters["save_id"])
+    if filters.get("competition_id") is not None:
+        competition = session.get(Competition, filters["competition_id"])
+        if competition:
+            query = query.where(Match.external_compobjid == competition.external_compobjid)
+        else:
+            return None
+    if filters.get("as_of"):
+        query = query.where(Match.played_at <= filters["as_of"][:10])
+    rows = session.scalars(query.order_by(Match.played_at, Match.id)).all()
+    if not rows:
+        return None
+
+    def average(key, side="team_stats"):
+        values = [getattr(row, side).get(key) for row in rows]
+        values = [value for value in values if value is not None]
+        return sum(values) / len(values) if values else None
+
+    wins = sum(row.result == "W" for row in rows)
+    draws = sum(row.result == "D" for row in rows)
+    losses = sum(row.result == "L" for row in rows)
+    points = wins * 3 + draws
+    return {
+        "matches": len(rows),
+        "wins": wins,
+        "draws": draws,
+        "losses": losses,
+        "goals_for": sum(row.club_goals or 0 for row in rows),
+        "goals_against": sum(row.opponent_goals or 0 for row in rows),
+        "points": points,
+        "points_per_game": points / len(rows),
+        "avg_xg": average("xg"),
+        "avg_xga": average("xg", "opponent_stats"),
+        "avg_possession": average("possession"),
+        "recent_results": [
+            {
+                "result": row.result,
+                "played_at": row.played_at,
+                "opponent": row.opponent_name,
+                "club_goals": row.club_goals,
+                "opponent_goals": row.opponent_goals,
+            }
+            for row in rows[-8:]
+        ],
+        "coverage": "SCREENSHOT_VERIFIED_MANUAL",
     }

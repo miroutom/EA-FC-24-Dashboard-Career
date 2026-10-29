@@ -2,7 +2,7 @@
 
 The supplied v0.2 specification is the requirements source. The starter prompt is implementation context. No screenshot/OCR/manual match-entry workflow is substituted for automatic collection.
 
-SQLite stores careers and exact-name historical aliases, seasons/metadata, import previews/batches, explicit save bindings and branches, immutable cumulative snapshots/rows, derived intervals, optional notes and sync diagnostics. `matches` is reserved for a future verified source and is never populated from intervals. DDL is versioned in Alembic concrete revision 0001; foreign keys, WAL, busy timeout, partial unique historical indexes are enabled.
+SQLite stores careers and exact-name historical aliases, seasons/metadata, import previews/batches, explicit save bindings and branches, immutable cumulative snapshots/rows, derived intervals, screenshot-verified match evidence, optional notes and sync diagnostics. Matches are never invented from intervals: team metrics, events and player ratings require an explicit evidence record. DDL is versioned in concrete Alembic revisions; foreign keys, WAL, busy timeout and unique source indexes are enabled.
 
 Historical import is a two-stage transaction workflow. Preview validates types, sheet, Unicode, seasons, limits and duplicate keys and records a database fingerprint. Commit checks the career, file digest, expiry, current fingerprint and explicit replacement strategy. No partial commit on failures.
 

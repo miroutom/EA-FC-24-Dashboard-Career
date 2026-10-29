@@ -14,6 +14,7 @@ export function Summary() {
       api<Dashboard>(`/careers/${career.id}/dashboard?${params(filters)}`),
   });
   const d = query.data;
+  const teamRecord = d?.team_form?.records[0];
   return (
     <>
       <div className="page-heading">
@@ -50,6 +51,78 @@ export function Summary() {
               warnings={d.warnings}
               demo={d.data_quality.includes("demo")}
             />
+            {d.team_matches && (
+              <section className="panel">
+                <div className="panel-heading">
+                  <div>
+                    <h2>Подтверждённая форма</h2>
+                    <p>Только матчи с явной карточкой и сохранёнными доказательствами</p>
+                  </div>
+                  <span className="pill">{d.team_matches.coverage}</span>
+                </div>
+                <div className="kpis">
+                  <Kpi label="Матчи" value={d.team_matches.matches} />
+                  <Kpi label="Победы" value={d.team_matches.wins} />
+                  <Kpi label="Ничьи" value={d.team_matches.draws} />
+                  <Kpi label="Поражения" value={d.team_matches.losses} />
+                </div>
+                <div className="verified-form-row">
+                  <div className="form-strip">
+                    {d.team_matches.recent_results.map((result, index) => (
+                      <span className={`form-${result.result.toLowerCase()}`} key={`${result.played_at}-${index}`} title={`${result.opponent}: ${fmt(result.club_goals)}–${fmt(result.opponent_goals)}`}>
+                        {result.result}
+                      </span>
+                    ))}
+                  </div>
+                  <p className="muted">
+                    Голы {d.team_matches.goals_for}–{d.team_matches.goals_against} · xG {fmt(d.team_matches.avg_xg, 1)} · владение {fmt(d.team_matches.avg_possession)}%
+                  </p>
+                  <Link to="/matches">Открыть матчи <ArrowRight size={15} /></Link>
+                </div>
+              </section>
+            )}
+            {teamRecord && (
+              <section className="panel">
+                <div className="panel-heading">
+                  <div>
+                    <h2>Форма команды</h2>
+                    <p>
+                      Экспериментальные агрегаты лиги · ID{" "}
+                      {teamRecord.league_id}
+                    </p>
+                  </div>
+                  <span className="pill">{d.team_form?.coverage}</span>
+                </div>
+                <div className="kpis">
+                  <Kpi label="Матчи" value={teamRecord.matches_played} />
+                  <Kpi label="Победы" value={teamRecord.wins} />
+                  <Kpi label="Ничьи" value={teamRecord.draws} />
+                  <Kpi label="Поражения" value={teamRecord.losses} />
+                </div>
+                <p className="muted">
+                  Голы: {fmt(teamRecord.goals_for)}–
+                  {fmt(teamRecord.goals_against)} · Очки:{" "}
+                  {fmt(teamRecord.points)} · Место:{" "}
+                  {fmt(teamRecord.table_position)}
+                </p>
+                {!!d.team_form?.recent_results.length && (
+                  <div
+                    className="player-badges"
+                    aria-label="Последние подтверждённые результаты"
+                  >
+                    {d.team_form.recent_results.map((result, index) => (
+                      <span
+                        className="pill"
+                        key={`${result.league_id}-${result.observed_at}-${index}`}
+                        title="Выведено из изменения сезонных W/D/L между соседними снимками"
+                      >
+                        {result.result}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </section>
+            )}
             <div className="dashboard-grid">
               <section className="panel">
                 <div className="panel-heading">
@@ -135,6 +208,9 @@ export function Summary() {
               </div>
             </section>
             <div className="unavailable">
+              Подтверждённые результаты, xG, владение, события и оценки доступны в разделе <Link to="/matches">«Матчи»</Link>.
+            </div>
+            <div className="unavailable" style={{ display: "none" }}>
               Поматчевые данные недоступны. Результаты, соперники, xG и владение
               появятся только при наличии подтверждённого источника.
             </div>

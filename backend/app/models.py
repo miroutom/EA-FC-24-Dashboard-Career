@@ -216,10 +216,60 @@ class SnapshotRow(Base):
     goals = Column(Integer, nullable=True)
     assists = Column(Integer, nullable=True)
     yellow = Column(Integer, nullable=True)
+    two_yellow = Column(Integer, nullable=True)
     red = Column(Integer, nullable=True)
     clean_sheets = Column(Integer, nullable=True)
+    saves = Column(Integer, nullable=True)
+    goals_conceded = Column(Integer, nullable=True)
+    motm = Column(Integer, nullable=True)
     avg_raw = Column(Float, nullable=True)
     __table_args__ = (UniqueConstraint("snapshot_id", "player_external_id", "team_external_id", "compobjid"),)
+
+
+class TeamStateSnapshot(Base):
+    __tablename__ = "team_state_snapshots"
+    id = Column(Integer, primary_key=True)
+    snapshot_id = Column(ForeignKey("collector_snapshots.id"), nullable=False, index=True)
+    team_external_id = Column(Integer, nullable=False)
+    league_external_id = Column(Integer, nullable=False)
+    matches_played = Column(Integer, nullable=True)
+    home_wins = Column(Integer, nullable=True)
+    home_draws = Column(Integer, nullable=True)
+    home_losses = Column(Integer, nullable=True)
+    away_wins = Column(Integer, nullable=True)
+    away_draws = Column(Integer, nullable=True)
+    away_losses = Column(Integer, nullable=True)
+    home_goals_for = Column(Integer, nullable=True)
+    home_goals_against = Column(Integer, nullable=True)
+    away_goals_for = Column(Integer, nullable=True)
+    away_goals_against = Column(Integer, nullable=True)
+    points = Column(Integer, nullable=True)
+    table_position = Column(Integer, nullable=True)
+    last_game_result_raw = Column(Integer, nullable=True)
+    form = Column(Integer, nullable=True)
+    short_form = Column(Integer, nullable=True)
+    long_form = Column(Integer, nullable=True)
+    __table_args__ = (UniqueConstraint("snapshot_id", "team_external_id", "league_external_id"),)
+
+
+class PlayerStateSnapshot(Base):
+    __tablename__ = "player_state_snapshots"
+    id = Column(Integer, primary_key=True)
+    snapshot_id = Column(ForeignKey("collector_snapshots.id"), nullable=False, index=True)
+    player_id = Column(ForeignKey("players.id"), nullable=False)
+    player_external_id = Column(Integer, nullable=False)
+    team_external_id = Column(Integer, nullable=False)
+    injury_id = Column(Integer, nullable=True)
+    injury_date_raw = Column(Integer, nullable=True)
+    injury_duration_days = Column(Integer, nullable=True)
+    last_match_minutes = Column(Integer, nullable=True)
+    last_match_overall = Column(Integer, nullable=True)
+    last_match_fact = Column(Integer, nullable=True)
+    last_match_position = Column(Integer, nullable=True)
+    latest_match_rating_raw = Column(Integer, nullable=True)
+    latest_match_rating_minutes = Column(Integer, nullable=True)
+    latest_match_rating_date_raw = Column(Integer, nullable=True)
+    __table_args__ = (UniqueConstraint("snapshot_id", "player_external_id", "team_external_id"),)
 
 
 class InferredDelta(Base):
@@ -246,6 +296,24 @@ class Match(Base):
     home_goals = Column(Integer, nullable=True)
     away_goals = Column(Integer, nullable=True)
     verified_source = Column(String, nullable=False)
+    external_compobjid = Column(Integer, nullable=True)
+    competition_name = Column(String(150), nullable=True)
+    club_team_external_id = Column(Integer, nullable=True)
+    opponent_name = Column(String(150), nullable=True)
+    club_was_home = Column(Boolean, nullable=True)
+    club_goals = Column(Integer, nullable=True)
+    opponent_goals = Column(Integer, nullable=True)
+    duration_minutes = Column(Float, nullable=True)
+    result = Column(String(1), nullable=True)
+    team_stats = Column(JSON, nullable=False, default=dict)
+    opponent_stats = Column(JSON, nullable=False, default=dict)
+    timeline = Column(JSON, nullable=False, default=list)
+    player_performances = Column(JSON, nullable=False, default=list)
+    screenshot_paths = Column(JSON, nullable=False, default=list)
+    evidence = Column(JSON, nullable=False, default=dict)
+    __table_args__ = (
+        Index("ux_match_source", "career_save_id", "source_external_match_id", unique=True),
+    )
 
 
 class Note(Base):

@@ -7,6 +7,7 @@
 - XLSX/CSV preview/validation/commit with exact-file idempotency, stale preview detection and explicit conflict replacement. Only the real workbook's `Все сезоны` is imported.
 - FastAPI, typed analytics response DTOs, local-only API guard, Russian React dashboard/table/overview/updates, player drawer/history, comparison, sync/errors/bindings and optional notes.
 - Automatic local stable-file watcher, atomic DB ingestion, quarantine/retry and 5-second UI refresh. No screenshot collection, OCR, cloud service or production fixtures.
+- Typed manual match-evidence API and Matches page for explicit screenshot-backed score, xG/team metrics, timeline, player ratings and a local-only evidence gallery. It never treats cumulative snapshot intervals as full match records.
 - Python and npm dependency locks, Windows/macOS startup instructions and GitHub Actions tests for backend on Windows/Linux and frontend on Linux.
 
 ## Actually checked locally
@@ -22,12 +23,19 @@ Development host: macOS, Python 3.12, Node 22. Browser: installed Chromium via P
 
 Real Excel (`Все сезоны`): **123 rows**, **82 distinct exact-name player identities**, **5 seasons**, **601 player goals**, **437 assists**, **3093 player appearances**, **364 clean-sheet observations**. Every career total reconciles with its season rows. These are PARTIAL_SCREENSHOT observations, not full club match statistics.
 
+## Windows live P0 follow-up — 2026-10-28
+
+- EA FC 24 runtime `1.0.120.18322` and Live Editor `v24.1.1.9` were exercised in an offline disposable manager career. Team context `191`, ISO game dates and 33 player-season rows were read through the installed v2 API fallbacks.
+- A played 10:0 produced the screenshot-matching delta: 16 appearances, 10 goals, 10 assists, 11 clean-sheet rows and one red card. Counters were unchanged on the post-match report and finalized after `USER_MATCH_COMPLETED` followed by return to the hub.
+- A quick-sim 1:0 produced 13 appearances, one Roko Šimić goal, one Lucas Gourna-Douath assist and 10 clean-sheet rows. Those counters were already finalized on the result screen after `ABOUT_TO_ENTER_QUICK_SIM` and `USER_MATCH_COMPLETED`; the hub snapshot was idempotent.
+- Lua file transport, watcher ingestion, immutable raw archiving and no-change deduplication worked without quarantine or watcher errors. The actual raw hashes, totals and event sequences are recorded in [the Windows evidence report](windows-live-validation-2026-10-28.md).
+- This preserved the requested P0 values, but later reload failures mean the in-game Lua collection path is not safe for continued use. It does not verify the automatic collector or P2.
+
 ## Not performed / gates still closed
 
-- No Windows EA FC 24/Live Editor execution: no actual played-match or quick-simulation before/after logs.
-- No real validation of game API availability, final-counter timing, season reader, save UID stability, file transport in the embedded Lua sandbox or script auto-start.
-- No actual P0 or P2 gate pass. `Collector: not verified` is intentional. Lua harness and synthetic files are not game evidence.
-- Live Editor compatibility with the user's game build is unknown. Advanced metrics are UNAVAILABLE and avg units NOT_TESTED.
+- No verified automatic `season_reader`, save UID stability, reload/rollback behavior, season rollover or script auto-start.
+- Callback state was captured: quick-sim counters were final at `USER_MATCH_COMPLETED`. Callback-enabled saves then crashed on reload. A later save also crashed after a second extended manual `0.3.0` diagnostic session, so `diagnostic.lua` is now default-disabled and optional DB scans were removed from the active snapshot path. All in-game collection gates remain closed pending an out-of-process design.
+- Interactive simulation was not tested. Advanced match metrics remain UNAVAILABLE. Raw `avg` behavior was observed but is not exposed as a verified average rating.
 - `design_references/` was absent from the cloned initial repository and known supplied-file locations. UI follows the written brief; screenshot parity was not checked.
 - GitHub Actions execution is separate from the local tests; publishing a workflow does not mean its remote jobs passed.
 

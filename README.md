@@ -1,8 +1,15 @@
 # Leicester City Analytics
 
+> **SAVE-SAFETY BLOCK (2026-10-29):** do not run any repository Lua script in a
+> career that must be preserved. A second manual `0.3.0` diagnostic session,
+> which traversed optional Live Editor DB tables, was followed by a reproducible
+> reload crash. `diagnostic.lua`, event probes and callback collection are now
+> disabled by default. Use already archived JSON, screenshots, or an
+> out-of-process parser while this boundary is investigated.
+
 Локальный аналитический дашборд для карьеры EA FC 24. Python 3.12 + FastAPI / SQLAlchemy / Alembic / SQLite; React + TypeScript + Vite / Tailwind / локальные shadcn-style компоненты / TanStack / Recharts. Интерфейс на русском, облако и Docker не нужны.
 
-**Реальная интеграция с игрой НЕ ПРОВЕРЕНА.** Разработка и автономные тесты выполнены на macOS. Нет доступа к запущенным Windows EA FC 24 и Live Editor. В UI честно показано `Collector: not verified`; P0/P2 остаются NOT_TESTED. Экспериментальный коллектор выключен до подтверждения файлового канала, событий, идентичности save и автоматического определения сезона. Историческое приложение и файловая обработка работают независимо. Регулярной загрузки скриншотов, OCR или ручного ввода статистики нет.
+**Диагностический Gate P0 проверен на Windows с реальными EA FC 24 и Live Editor.** Подтверждены сезонные счётчики до/после сыгранного матча и быстрой симуляции, запись внешних файлов и импорт watcher-ом. Автоматический callback-collector признан небезопасным на проверенной сборке: saves после event-handler сессий повторяемо не загружались, тогда как diagnostic-only save загружался. Поэтому `Collector: not verified`, `collector.experimental.lua` жёстко выключен, а Gate P2 заблокирован до другой, отложенной за пределы callback архитектуры. Историческое приложение и файловая обработка работают независимо. Скриншоты использовались только как контроль P0; регулярной загрузки скриншотов, OCR или ручного ввода статистики нет.
 
 ## Демо со стабовыми данными — Mac
 
@@ -75,7 +82,7 @@ Backend: `python -m app.main` с активированной `.venv`. В дру
 2. В «Синхронизация» один раз создайте binding save, скопируйте `instance_key` в локальный `config.lua`, созданный из `collectors/fc24-live-editor/config.example.lua`. Настройте существующий `DATA_DIR/spool` абсолютным Windows-путём.
 3. Выполните [точную последовательность P0](docs/manual-game-validation.md): diagnostic → event_probe → сыгранный матч → быстрая симуляция → повторное событие → reload/откат → смена сезона. Сохраните raw before/after и версии. `python scripts/diagnose_snapshots.py before.json after.json` показывает изменения за период.
 4. Подтвердите реальный автоматический season_reader для установленного API, события после окончательного обновления статистики, файловый канал и автозапуск. Здесь нет догадки «сезон меняется 1 июля» и выдуманных event ID. Если источник контекста недоступен, gate остаётся закрытым.
-5. Только после успешного P0 заполните verification flags и `verified_event_names` в config.lua. Запустите `collector.experimental.lua` один раз; настройте автозапуск по реально проверенному механизму вашей версии LE. После этого обычный процесс игры не требует ручного экспорта/скриншотов. До этого автоматизация считается экспериментальной, а не завершённой проверкой игры.
+5. Не включайте verification flags и не запускайте `collector.experimental.lua` на проверенной сборке: реальный тест показал, что работа внутри CareerModeEvent callback нарушает save/reload безопасность. Следующая реализация должна только ставить лёгкий сигнал в callback, выполнять чтение позднее вне callback и заново пройти тест на одноразовой карьере.
 6. `verified_live` в binding можно подтвердить через API `/saves/bind` только с текстом evidence (версии, сценарий). Для полного Live TOTAL дополнительно нужна подтверждённая полнота турниров в snapshot. Без этого выбирайте отдельный турнир; неизвестные общие суммы показываются как `—`.
 
 UID не обязателен: явный instance_key безопаснее непроверенного UID. Ключ нельзя оставлять прежним при переключении на другую карьеру/save. Unknown save/сезон/команда → NEEDS_BINDING, без случайного назначения. Исправленные контекстные данные доставляются новым корректным снимком; raw не редактируется.

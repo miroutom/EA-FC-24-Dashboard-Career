@@ -1,6 +1,7 @@
 import json
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
+from pathlib import Path
 
 from alembic.config import Config
 from fastapi import Depends, FastAPI, File, Query, Request, UploadFile
@@ -33,17 +34,28 @@ from .models import (
     SnapshotRow,
     SyncEvent,
 )
-from .responses import AnalyticsDTO, CareerDTO, CompareDTO, CompetitionDTO, DashboardDTO, PlayerDTO, SeasonDTO
+from .responses import (
+    AnalyticsDTO,
+    CareerDTO,
+    CompareDTO,
+    CompetitionDTO,
+    DashboardDTO,
+    MatchDTO,
+    PlayerDTO,
+    SeasonDTO,
+)
 from .schemas import (
     DTO,
     CareerInput,
     CommitInput,
     IdentityInput,
+    MatchEvidenceInput,
     NoteInput,
     PolicyInput,
     ResolveInput,
     SaveInput,
 )
+from .screenshot_capture import ScreenshotWatcher, WindowsOcr
 from .services import Problem, career, season
 
 
@@ -75,17 +87,23 @@ def create_app(settings=None, migrate=True):
         simulator = DemoSimulator(ingestor, seed_demo(factory))
         simulator.seed_snapshots()
     watcher = Watcher(ingestor)
+    screenshot_watcher = ScreenshotWatcher(
+        factory, settings, WindowsOcr(ROOT / "scripts" / "windows_ocr.ps1")
+    )
 
     @asynccontextmanager
     async def lifespan(app):
         if settings.watcher_enabled:
             watcher.start()
+        screenshot_watcher.start()
         yield
+        screenshot_watcher.stop()
         watcher.stop()
         engine.dispose()
 
     app = FastAPI(title="Leicester City Analytics", version="0.2.0", lifespan=lifespan)
     app.state.factory, app.state.ingestor, app.state.watcher = factory, ingestor, watcher
+    app.state.screenshot_watcher = screenshot_watcher
     app.state.simulator = simulator
 
     def db():
@@ -211,6 +229,154 @@ def create_app(settings=None, migrate=True):
             row_dto(c)
             for c in session.scalars(select(Competition).where(Competition.external_compobjid.in_(ids)))
         ]
+
+    def public_match(row, session):
+        result = {name: getattr(row, name) for name in MatchDTO.model_fields if name != "screenshot_urls"}
+        result["screenshot_urls"] = [
+            f"{base}/careers/{session.get(CareerSave, row.career_save_id).career_id}/matches/{row.id}/screenshots/{index}"
+            for index, _ in enumerate(row.screenshot_paths or [])
+        ]
+        return result
+
+    def match_drafts_for(career_id: int, session):
+        save_ids = set(session.scalars(select(CareerSave.id).where(CareerSave.career_id == career_id)).all())
+        root = settings.data_dir / "screenshot_drafts"
+        results = []
+        if not root.is_dir():
+            return results
+        for draft_file in root.glob("*/draft.json"):
+            try:
+                draft = json.loads(draft_file.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            if draft.get("match", {}).get("career_save_id") not in save_ids:
+                continue
+            draft_id = draft_file.parent.name
+            screenshot_paths = draft.get("match", {}).get("screenshot_paths", [])
+            draft["screenshot_urls"] = [
+                f"{base}/careers/{career_id}/match-drafts/{draft_id}/screenshots/{index}"
+                for index, _ in enumerate(screenshot_paths)
+            ]
+            results.append(draft)
+        return sorted(results, key=lambda item: item.get("id", ""), reverse=True)
+
+    @app.get(base + "/careers/{career_id}/match-drafts", response_model=list[DTO])
+    def match_drafts(career_id: int, session=Depends(db)):
+        career(session, career_id)
+        return match_drafts_for(career_id, session)
+
+    @app.get(
+        base + "/careers/{career_id}/match-drafts/{draft_id}/screenshots/{index}",
+        include_in_schema=False,
+    )
+    def match_draft_screenshot(career_id: int, draft_id: str, index: int, session=Depends(db)):
+        draft = next(
+            (item for item in match_drafts_for(career_id, session) if item.get("id") == draft_id),
+            None,
+        )
+        if not draft:
+            raise Problem(404, "DRAFT_NOT_FOUND", "Черновик матча не найден")
+        paths = draft.get("match", {}).get("screenshot_paths", [])
+        if index < 0 or index >= len(paths):
+            raise Problem(404, "SCREENSHOT_NOT_FOUND", "Скриншот не найден")
+        data_root = Path(settings.data_dir).resolve()
+        source = (data_root / paths[index]).resolve()
+        if not source.is_relative_to(data_root) or not source.is_file():
+            raise Problem(404, "SCREENSHOT_NOT_FOUND", "Скриншот не найден")
+        media_type = "image/png" if source.suffix.lower() == ".png" else "image/jpeg"
+        return FileResponse(source, media_type=media_type)
+
+    @app.get(base + "/careers/{career_id}/matches", response_model=list[MatchDTO])
+    def matches(
+        career_id: int,
+        season_id: int | None = None,
+        competition_id: int | None = None,
+        save_id: int | None = None,
+        session=Depends(db),
+    ):
+        career(session, career_id)
+        query = select(Match).join(CareerSave).where(CareerSave.career_id == career_id)
+        if season_id is not None:
+            query = query.where(Match.season_id == season_id)
+        if save_id is not None:
+            query = query.where(Match.career_save_id == save_id)
+        if competition_id is not None:
+            competition = session.get(Competition, competition_id)
+            if not competition:
+                raise Problem(404, "COMPETITION_NOT_FOUND", "Турнир не найден")
+            query = query.where(Match.external_compobjid == competition.external_compobjid)
+        rows = session.scalars(query.order_by(Match.played_at.desc(), Match.id.desc())).all()
+        return [public_match(row, session) for row in rows]
+
+    @app.post(base + "/careers/{career_id}/matches/evidence", response_model=MatchDTO, status_code=201)
+    def add_match_evidence(career_id: int, body: MatchEvidenceInput, session=Depends(db)):
+        career(session, career_id)
+        save = session.get(CareerSave, body.career_save_id)
+        if not save or save.career_id != career_id:
+            raise Problem(404, "SAVE_NOT_FOUND", "Сохранение не найдено")
+        selected_season = session.get(Season, body.season_id)
+        if not selected_season or selected_season.career_id != career_id:
+            raise Problem(404, "SEASON_NOT_FOUND", "Сезон не найден")
+        existing = session.scalar(
+            select(Match).where(
+                Match.career_save_id == body.career_save_id,
+                Match.source_external_match_id == body.source_external_match_id,
+            )
+        )
+        if existing:
+            return public_match(existing, session)
+        result_code = (
+            "W"
+            if body.club_goals > body.opponent_goals
+            else "L"
+            if body.club_goals < body.opponent_goals
+            else "D"
+        )
+        home_goals = body.club_goals if body.club_was_home else body.opponent_goals
+        away_goals = body.opponent_goals if body.club_was_home else body.club_goals
+        result = Match(
+            career_save_id=body.career_save_id,
+            season_id=body.season_id,
+            source_external_match_id=body.source_external_match_id,
+            played_at=body.played_at.isoformat(),
+            home_goals=home_goals,
+            away_goals=away_goals,
+            verified_source="screenshots+snapshot_delta",
+            external_compobjid=body.external_compobjid,
+            competition_name=body.competition_name,
+            club_team_external_id=body.club_team_external_id,
+            opponent_name=body.opponent_name,
+            club_was_home=body.club_was_home,
+            club_goals=body.club_goals,
+            opponent_goals=body.opponent_goals,
+            duration_minutes=body.duration_minutes,
+            result=result_code,
+            team_stats=body.team_stats.model_dump(mode="json"),
+            opponent_stats=body.opponent_stats.model_dump(mode="json"),
+            timeline=[event.model_dump(mode="json") for event in body.timeline],
+            player_performances=[player.model_dump(mode="json") for player in body.player_performances],
+            screenshot_paths=body.screenshot_paths,
+            evidence={"note": body.evidence_note, "sources": ["screenshots", "snapshot_delta"]},
+        )
+        session.add(result)
+        session.flush()
+        return public_match(result, session)
+
+    @app.get(base + "/careers/{career_id}/matches/{match_id}/screenshots/{index}", include_in_schema=False)
+    def match_screenshot(career_id: int, match_id: int, index: int, session=Depends(db)):
+        match = session.get(Match, match_id)
+        save = session.get(CareerSave, match.career_save_id) if match else None
+        if not match or not save or save.career_id != career_id:
+            raise Problem(404, "MATCH_NOT_FOUND", "Матч не найден")
+        paths = match.screenshot_paths or []
+        if index < 0 or index >= len(paths):
+            raise Problem(404, "SCREENSHOT_NOT_FOUND", "Скриншот не найден")
+        data_root = Path(settings.data_dir).resolve()
+        source = (data_root / paths[index]).resolve()
+        if not source.is_relative_to(data_root) or not source.is_file():
+            raise Problem(404, "SCREENSHOT_NOT_FOUND", "Скриншот не найден")
+        media_type = "image/png" if source.suffix.lower() == ".png" else "image/jpeg"
+        return FileResponse(source, media_type=media_type)
 
     @app.get(base + "/careers/{career_id}/dashboard", response_model=DashboardDTO)
     def dashboard(career_id: int, f=Depends(filters), session=Depends(db)):
@@ -448,10 +614,20 @@ def create_app(settings=None, migrate=True):
                 "last_scan": watcher.last_scan,
                 "error": watcher.last_error,
             },
+            "screenshot_watcher": {
+                "enabled": screenshot_watcher.configured,
+                "directory": str(settings.screenshot_watch_dir) if settings.screenshot_watch_dir else None,
+                "pending": len(screenshot_watcher.pending),
+                "last_scan": screenshot_watcher.last_scan,
+                "last_draft": screenshot_watcher.last_draft,
+                "error": screenshot_watcher.last_error,
+            },
             "capabilities": {
                 "match_details": "UNAVAILABLE",
-                "ratings": "NOT_TESTED",
-                "auto_capture": "SIMULATED" if settings.demo_mode else "NOT_TESTED",
+                "ratings": "SIMULATED" if settings.demo_mode else "EXPERIMENTAL",
+                "season_form": "SIMULATED" if settings.demo_mode else "EXPERIMENTAL",
+                "injuries": "SIMULATED" if settings.demo_mode else "EXPERIMENTAL",
+                "auto_capture": "SIMULATED" if settings.demo_mode else "BLOCKED_UNSAFE_CALLBACKS",
             },
         }
 
